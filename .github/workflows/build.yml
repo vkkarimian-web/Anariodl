@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -22,6 +22,12 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+
+      - name: Accept licenses
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
 
       - name: Unzip project
         run: |
@@ -29,8 +35,7 @@ jobs:
           echo "Using zip: $ZIP"
           mkdir -p project
           unzip -q "$ZIP" -d project
-          # if zip has a single root folder (AnarioDL/...), enter it
-          if [ \( (ls -1 project | wc -l) -eq 1 ] && [ -d project/ \)(ls project) ]; then
+          if [ \( (ls -1 project | wc -l) -eq 1 ] && [ -d "project/ \)(ls project)" ]; then
             ROOT="project/$(ls project)"
           else
             ROOT="project"
@@ -52,6 +57,11 @@ jobs:
           if [ -z "$APK" ]; then
             APK=$(find "$ROOT/app/build/outputs/apk" -name "*.apk" | head -n 1)
           fi
+          if [ -z "$APK" ] || [ ! -f "$APK" ]; then
+            echo "APK not found"
+            find "$ROOT/app/build/outputs" -type f || true
+            exit 1
+          fi
           echo "APK=$APK"
           cp "$APK" dist/AnarioDL-v3.apk
           (cd dist && zip -9 AnarioDL-v3.zip AnarioDL-v3.apk)
@@ -62,3 +72,4 @@ jobs:
         with:
           name: AnarioDL-v3
           path: dist/AnarioDL-v3.zip
+          if-no-files-found: error
