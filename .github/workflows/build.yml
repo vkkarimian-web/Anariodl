@@ -1,0 +1,64 @@
+name: Build Anario DL
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Unzip project
+        run: |
+          ZIP=$(ls *.zip | head -n 1)
+          echo "Using zip: $ZIP"
+          mkdir -p project
+          unzip -q "$ZIP" -d project
+          # if zip has a single root folder (AnarioDL/...), enter it
+          if [ \( (ls -1 project | wc -l) -eq 1 ] && [ -d project/ \)(ls project) ]; then
+            ROOT="project/$(ls project)"
+          else
+            ROOT="project"
+          fi
+          echo "ROOT=$ROOT" >> $GITHUB_ENV
+          ls -la "$ROOT"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x "$ROOT/gradlew"
+
+      - name: Build release APK
+        working-directory: ${{ env.ROOT }}
+        run: ./gradlew clean :app:assembleRelease --no-daemon
+
+      - name: Prepare AnarioDL-v3.zip
+        run: |
+          mkdir -p dist
+          APK=$(find "$ROOT/app/build/outputs/apk" -name "*arm64*.apk" | head -n 1)
+          if [ -z "$APK" ]; then
+            APK=$(find "$ROOT/app/build/outputs/apk" -name "*.apk" | head -n 1)
+          fi
+          echo "APK=$APK"
+          cp "$APK" dist/AnarioDL-v3.apk
+          (cd dist && zip -9 AnarioDL-v3.zip AnarioDL-v3.apk)
+          ls -lh dist/
+
+      - name: Upload AnarioDL-v3.zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnarioDL-v3
+          path: dist/AnarioDL-v3.zip
